@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from depotdev.api.depot.buildkit.v1 import buildkit_pb2 as depot_dot_buildkit_dot_v1_dot_buildkit__pb2
+from depot_client.api.depot.buildkit.v1 import buildkit_pb2 as depot_dot_buildkit_dot_v1_dot_buildkit__pb2
 
 GRPC_GENERATED_VERSION = '1.64.0'
 GRPC_VERSION = grpc.__version__

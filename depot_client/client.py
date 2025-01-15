@@ -7,22 +7,22 @@ import grpc
 import grpc.aio
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from depotdev.api.depot.build.v1 import build_pb2, build_pb2_grpc
-from depotdev.api.depot.buildkit.v1 import buildkit_pb2, buildkit_pb2_grpc
-from depotdev.api.depot.core.v1 import (
+from depot_client.api.depot.build.v1 import build_pb2, build_pb2_grpc
+from depot_client.api.depot.buildkit.v1 import buildkit_pb2, buildkit_pb2_grpc
+from depot_client.api.depot.core.v1 import (
     build_pb2 as core_build_pb2,
 )
-from depotdev.api.depot.core.v1 import (
+from depot_client.api.depot.core.v1 import (
     build_pb2_grpc as core_build_pb2_grpc,
 )
-from depotdev.api.depot.core.v1 import (
+from depot_client.api.depot.core.v1 import (
     project_pb2 as core_project_pb2,
 )
-from depotdev.api.depot.core.v1 import (
+from depot_client.api.depot.core.v1 import (
     project_pb2_grpc as core_project_pb2_grpc,
 )
 
-DEPOT_DEV_GRPC_HOST = "api.depot.dev"
+DEPOT_GRPC_HOST = "api.depot.dev"
 
 
 @dataclass
@@ -37,7 +37,7 @@ class BuildEndpoint:
 class BaseClient:
     def _create_channel_credentials(self) -> grpc.ChannelCredentials:
         channel_creds = grpc.ssl_channel_credentials()
-        token = os.getenv("DEPOT_DEV_API_TOKEN")
+        token = os.getenv("DEPOT_API_TOKEN")
         call_creds = grpc.access_token_call_credentials(token)
         return grpc.composite_channel_credentials(channel_creds, call_creds)
 
@@ -67,7 +67,7 @@ class BaseClient:
 class Client(BaseClient):
     def __init__(
         self,
-        host: str = DEPOT_DEV_GRPC_HOST,
+        host: str = DEPOT_GRPC_HOST,
         port: int = 443,
     ):
         credentials = self._create_channel_credentials()
@@ -169,7 +169,7 @@ class Client(BaseClient):
 class AsyncClient(BaseClient):
     def __init__(
         self,
-        host: str = DEPOT_DEV_GRPC_HOST,
+        host: str = DEPOT_GRPC_HOST,
         port: int = 443,
     ):
         credentials = self._create_channel_credentials()
