@@ -1,0 +1,72 @@
+syntax = "proto3";
+package depot.core.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service BuildService {
+  // Share a URL to a build with users outside of your organization
+  rpc ShareBuild(ShareBuildRequest) returns (ShareBuildResponse);
+
+  // Stop sharing a build
+  rpc StopSharingBuild(StopSharingBuildRequest) returns (StopSharingBuildResponse);
+
+  // List the builds in your organization
+  rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse);
+
+  // Get the build metadata of a build
+  rpc GetBuild(GetBuildRequest) returns (GetBuildResponse);
+}
+
+message ShareBuildRequest {
+  string build_id = 1;
+}
+
+message ShareBuildResponse {
+  string share_url = 1;
+}
+
+message StopSharingBuildRequest {
+  string build_id = 1;
+}
+
+message StopSharingBuildResponse {}
+
+message ListBuildsRequest {
+  string project_id = 1;
+  optional int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListBuildsResponse {
+  repeated Build builds = 1;
+  string next_page_token = 2;
+}
+
+message GetBuildRequest {
+  string build_id = 1;
+}
+
+message GetBuildResponse {
+  Build build = 1;
+}
+
+message Build {
+  string build_id = 1;
+  Status status = 2;
+  google.protobuf.Timestamp created_at = 3;
+  optional google.protobuf.Timestamp started_at = 4;
+  optional google.protobuf.Timestamp finished_at = 5;
+  optional int32 build_duration_seconds = 6;
+  optional int32 saved_duration_seconds = 7;
+  optional int32 cached_steps = 8;
+  optional int32 total_steps = 9;
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_RUNNING = 1;
+    STATUS_FAILED = 2;
+    STATUS_SUCCESS = 3;
+    STATUS_ERROR = 4;
+    STATUS_CANCELED = 5;
+  }
+}

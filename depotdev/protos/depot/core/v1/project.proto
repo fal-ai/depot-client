@@ -1,0 +1,220 @@
+syntax = "proto3";
+package depot.core.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service ProjectService {
+  // List all projects
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {}
+
+  // Get a project
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {}
+
+  // Create a new project
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {}
+
+  // Update a project
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {}
+
+  // Delete a project
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {}
+
+  // Reset a project will terminate all machines and delete all cached data.
+  rpc ResetProject(ResetProjectRequest) returns (ResetProjectResponse) {}
+
+  // List project's trust policies.
+  rpc ListTrustPolicies(ListTrustPoliciesRequest) returns (ListTrustPoliciesResponse) {}
+
+  // Add a trust policy to a project.
+  rpc AddTrustPolicy(AddTrustPolicyRequest) returns (AddTrustPolicyResponse) {}
+
+  // Remove a trust policy from a project.
+  rpc RemoveTrustPolicy(RemoveTrustPolicyRequest) returns (RemoveTrustPolicyResponse) {}
+
+  // List project's API tokens.
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+
+  // Create a project API token.
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse) {}
+
+  // Create a project API token.
+  rpc UpdateToken(UpdateTokenRequest) returns (UpdateTokenResponse) {}
+
+  // Delete project API token.
+  rpc DeleteToken(DeleteTokenRequest) returns (DeleteTokenResponse) {}
+}
+
+message Project {
+  string project_id = 1;
+  string organization_id = 2;
+  string name = 3;
+  string region_id = 4;
+  google.protobuf.Timestamp created_at = 5;
+  CachePolicy cache_policy = 6;
+  Hardware hardware = 7;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message GetProjectRequest {
+  string project_id = 1;
+}
+
+message GetProjectResponse {
+  Project project = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  optional string organization_id = 2;
+  string region_id = 3;
+  optional CachePolicy cache_policy = 4;
+  optional Hardware hardware = 5;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}
+
+message UpdateProjectRequest {
+  string project_id = 1;
+  optional string name = 2;
+  optional string region_id = 3;
+  optional CachePolicy cache_policy = 4;
+  optional Hardware hardware = 5;
+}
+
+message UpdateProjectResponse {
+  Project project = 1;
+}
+
+message DeleteProjectRequest {
+  string project_id = 1;
+}
+
+message DeleteProjectResponse {}
+
+message ResetProjectRequest {
+  string project_id = 1;
+}
+
+message ResetProjectResponse {}
+
+message CachePolicy {
+  optional int64 keep_bytes = 1 [deprecated = true];
+  int32 keep_days = 2;
+  int32 keep_gb = 3;
+}
+
+// Hardware represents the hardware configuration of a project.
+enum Hardware {
+  // By default is 16 CPU and 32GB of memory. Supported by AWS builders.
+  HARDWARE_UNSPECIFIED = 0;
+  // 16 CPU and 32GB of memory. Supported by AWS builders.
+  HARDWARE_16X32 = 1;
+  // 4 CPU and 4GB of memory.
+  HARDWARE_4X4 = 2;
+  // 8 CPU and 8GB of memory.
+  HARDWARE_8X8 = 3;
+  // 8 CPU and 16GB of memory. Supported by AWS builders.
+  HARDWARE_8X16 = 4;
+  // 32 CPU and 64GB of memory. Supported by AWS builders.
+  HARDWARE_32X64 = 5;
+  // 64 CPU and 128GB of memory. Supported by AWS builders.
+  HARDWARE_64X128 = 6;
+}
+
+message ListTrustPoliciesRequest {
+  string project_id = 1;
+}
+
+message ListTrustPoliciesResponse {
+  repeated TrustPolicy trust_policies = 1;
+}
+
+message AddTrustPolicyRequest {
+  string project_id = 1;
+  oneof provider {
+    TrustPolicy.Buildkite buildkite = 2;
+    TrustPolicy.CircleCI circleci = 3;
+    TrustPolicy.GitHub github = 4;
+  }
+}
+
+message AddTrustPolicyResponse {
+  TrustPolicy trust_policy = 1;
+}
+
+message RemoveTrustPolicyRequest {
+  string project_id = 1;
+  string trust_policy_id = 2;
+}
+
+message RemoveTrustPolicyResponse {}
+
+message TrustPolicy {
+  string trust_policy_id = 1;
+  oneof provider {
+    Buildkite buildkite = 2;
+    CircleCI circleci = 3;
+    GitHub github = 4;
+  }
+
+  message GitHub {
+    // The GitHub organization or user name
+    string repository_owner = 1;
+    string repository = 2;
+  }
+
+  message CircleCI {
+    // CircleCI organization UUID must be a valid UUID, not the friendly organization ID.
+    string organization_uuid = 1;
+    // CircleCI project UUID must be a valid UUID, not the friendly project ID
+    string project_uuid = 2;
+  }
+
+  message Buildkite {
+    string organization_slug = 1;
+    string pipeline_slug = 2;
+  }
+}
+
+message ListTokensRequest {
+  string project_id = 1;
+}
+
+message ListTokensResponse {
+  repeated Token tokens = 1;
+
+  message Token {
+    string token_id = 1;
+    string description = 2;
+  }
+}
+
+message CreateTokenRequest {
+  string project_id = 1;
+  string description = 2;
+}
+
+message CreateTokenResponse {
+  string token_id = 1;
+  string secret = 2;
+}
+
+message UpdateTokenRequest {
+  string token_id = 1;
+  string description = 2;
+}
+
+message UpdateTokenResponse {}
+
+message DeleteTokenRequest {
+  string token_id = 1;
+}
+
+message DeleteTokenResponse {}

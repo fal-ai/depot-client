@@ -1,0 +1,62 @@
+syntax = "proto3";
+package depot.buildkit.v1;
+
+service BuildKitService {
+  rpc GetEndpoint(GetEndpointRequest) returns (stream GetEndpointResponse);
+  rpc ReportHealth(stream ReportHealthRequest) returns (ReportHealthResponse);
+  rpc ReleaseEndpoint(ReleaseEndpointRequest) returns (ReleaseEndpointResponse);
+}
+
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  PLATFORM_AMD64 = 1;
+  PLATFORM_ARM64 = 2;
+}
+
+message GetEndpointRequest {
+  string build_id = 1;
+  Platform platform = 2;
+}
+
+message GetEndpointResponse {
+  oneof connection {
+    PendingConnection pending = 1;
+    ActiveConnection active = 2;
+  }
+
+  message PendingConnection {}
+
+  message ActiveConnection {
+    string endpoint = 1;
+    string server_name = 2;
+    CertificatePair cert = 3;
+    PublicCertificate ca_cert = 4;
+  }
+}
+
+message ReleaseEndpointRequest {
+  string build_id = 1;
+  Platform platform = 2;
+}
+
+message ReleaseEndpointResponse {}
+
+message PublicCertificate {
+  string cert = 1;
+}
+
+message PrivateKey {
+  string key = 1;
+}
+
+message CertificatePair {
+  PublicCertificate cert = 1;
+  PrivateKey key = 2;
+}
+
+message ReportHealthRequest {
+  string build_id = 1;
+  Platform platform = 2;
+}
+
+message ReportHealthResponse {}
