@@ -12,3 +12,9 @@ api:
 	    depot_client/protos/depot/core/v1/build.proto \
 	    depot_client/protos/depot/core/v1/project.proto
 	find depot_client/api -type f -name "*_pb2*.py" -exec sed -i '' 's/from depot\./from depot_client.api.depot./g' {} +
+
+build:
+	python -m build
+
+publish: build
+	python -m twine upload dist/*
