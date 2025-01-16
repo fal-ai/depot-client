@@ -1,37 +1,109 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import AsyncIterator, Dict, Iterator, List, Optional
+from typing import List, Optional
 
 import grpc
 import grpc.aio
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from depot_client.api.depot.build.v1 import build_pb2, build_pb2_grpc
-from depot_client.api.depot.buildkit.v1 import buildkit_pb2, buildkit_pb2_grpc
-from depot_client.api.depot.core.v1 import (
-    build_pb2 as core_build_pb2,
-)
-from depot_client.api.depot.core.v1 import (
-    build_pb2_grpc as core_build_pb2_grpc,
-)
-from depot_client.api.depot.core.v1 import (
-    project_pb2 as core_project_pb2,
-)
-from depot_client.api.depot.core.v1 import (
-    project_pb2_grpc as core_project_pb2_grpc,
-)
+from depot_client.build import AsyncBuildService, BuildService
+from depot_client.buildkit import AsyncBuildKitService, BuildKitService, EndpointInfo
+from depot_client.core_build import AsyncCoreBuildService, BuildInfo, CoreBuildService
+from depot_client.project import AsyncProjectService, ProjectInfo, ProjectService
 
 DEPOT_GRPC_HOST = "api.depot.dev"
+DEPOT_GRPC_PORT = 443
 
 
 @dataclass
-class BuildEndpoint:
-    endpoint: str
-    server_name: str
-    client_cert: str
-    client_key: str
-    ca_cert: str
+class Endpoint(EndpointInfo):
+    build_id: str
+    platform: str
+    buildkit: BuildKitService
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def close(self):
+        self.buildkit.release_endpoint(self.build_id, self.platform)
+
+
+@dataclass
+class AsyncEndpoint(EndpointInfo):
+    build_id: str
+    platform: str
+    buildkit: BuildKitService
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.close()
+
+    async def close(self):
+        await self.buildkit.release_endpoint(self.build_id, self.platform)
+
+
+class Build:
+    def __init__(self, build_service, build_id: str, build_token: str):
+        self.build_id = build_id
+        self.build_token = build_token
+        self.buildkit = BuildKitService(build_token)
+
+    def close(self):
+        self.buildkit.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def get_endpoint(self, platform: Optional[str] = None) -> Endpoint:
+        endpoint = self.buildkit.get_endpoint(self.build_id, platform=platform)
+        return Endpoint(
+            endpoint=endpoint.endpoint,
+            server_name=endpoint.server_name,
+            cert=endpoint.cert,
+            cert_key=endpoint.cert_key,
+            ca_cert=endpoint.ca_cert,
+            build_id=self.build_id,
+            platform=platform,
+            buildkit=self.buildkit,
+        )
+
+
+class AsyncBuild:
+    def __init__(self, build_service, build_id: str, build_token: str):
+        self.build_id = build_id
+        self.build_token = build_token
+        self.buildkit = AsyncBuildKitService(build_token)
+
+    async def close(self):
+        await self.buildkit.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.close()
+
+    async def get_endpoint(self, platform: Optional[str] = None) -> AsyncEndpoint:
+        endpoint = await self.buildkit.get_endpoint(self.build_id, platform=platform)
+        return AsyncEndpoint(
+            endpoint=endpoint.endpoint,
+            server_name=endpoint.server_name,
+            cert=endpoint.cert,
+            cert_key=endpoint.cert_key,
+            ca_cert=endpoint.ca_cert,
+            build_id=self.build_id,
+            platform=platform,
+            buildkit=self.buildkit,
+        )
 
 
 class BaseClient:
@@ -44,234 +116,104 @@ class BaseClient:
     def _proto_to_datetime(self, timestamp: Timestamp) -> datetime:
         return datetime.fromtimestamp(timestamp.seconds + timestamp.nanos / 1e9)
 
-    def _build_to_dict(self, build: core_build_pb2.Build) -> Dict:
-        result = {
-            "build_id": build.build_id,
-            "status": core_build_pb2.Build.Status.Name(build.status),
-            "created_at": self._proto_to_datetime(build.created_at),
-        }
-        for field in ["started_at", "finished_at"]:
-            if build.HasField(field):
-                result[field] = self._proto_to_datetime(getattr(build, field))
-        for field in [
-            "build_duration_seconds",
-            "saved_duration_seconds",
-            "cached_steps",
-            "total_steps",
-        ]:
-            if build.HasField(field):
-                result[field] = getattr(build, field)
-        return result
-
 
 class Client(BaseClient):
     def __init__(
         self,
         host: str = DEPOT_GRPC_HOST,
-        port: int = 443,
+        port: int = DEPOT_GRPC_PORT,
     ):
         credentials = self._create_channel_credentials()
         self.channel = grpc.secure_channel(f"{host}:{port}", credentials)
+        self.build = BuildService(self.channel)
+        self.core_build = CoreBuildService(self.channel)
+        self.project = ProjectService(self.channel)
 
-        self.build = build_pb2_grpc.BuildServiceStub(self.channel)
-        self.buildkit = buildkit_pb2_grpc.BuildKitServiceStub(self.channel)
-        self.core_build = core_build_pb2_grpc.BuildServiceStub(self.channel)
-        self.core_project = core_project_pb2_grpc.ProjectServiceStub(self.channel)
+    def close(self):
+        self.channel.close()
 
-    def list_projects(self) -> List[Dict]:
-        request = core_project_pb2.ListProjectsRequest()
-        response = self.core_project.ListProjects(request)
-        return [
-            {
-                "project_id": proj.project_id,
-                "organization_id": proj.organization_id,
-                "name": proj.name,
-                "region_id": proj.region_id,
-                "created_at": self._proto_to_datetime(proj.created_at),
-                "hardware": core_project_pb2.Hardware.Name(proj.hardware),
-            }
-            for proj in response.projects
-        ]
+    def __enter__(self):
+        return self
 
-    def create_build(self, project_id: str) -> tuple[str, str]:
-        request = build_pb2.CreateBuildRequest(project_id=project_id)
-        response = self.build.CreateBuild(request)
-        return response.build_id, response.build_token
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def list_projects(self) -> List[ProjectInfo]:
+        return self.project.list_projects()
+
+    def create_build(self, project_id: str) -> Build:
+        build_id, build_token = self.build.create_build(project_id)
+        return Build(self.build, build_id=build_id, build_token=build_token)
 
     def finish_build(self, build_id: str, error: Optional[str] = None) -> None:
-        if error:
-            error_msg = build_pb2.FinishBuildRequest.BuildError(error=error)
-            request = build_pb2.FinishBuildRequest(build_id=build_id, error=error_msg)
-        else:
-            success_msg = build_pb2.FinishBuildRequest.BuildSuccess()
-            request = build_pb2.FinishBuildRequest(
-                build_id=build_id, success=success_msg
-            )
-        self.build.FinishBuild(request)
-
-    def get_endpoint(
-        self, build_id: str, platform: str = "PLATFORM_AMD64"
-    ) -> Iterator[BuildEndpoint]:
-        platform_enum = buildkit_pb2.Platform.Value(platform)
-        request = buildkit_pb2.GetEndpointRequest(
-            build_id=build_id, platform=platform_enum
-        )
-
-        for response in self.buildkit.GetEndpoint(request):
-            if response.HasField("active"):
-                active = response.active
-                yield BuildEndpoint(
-                    endpoint=active.endpoint,
-                    server_name=active.server_name,
-                    client_cert=active.cert.cert.cert,
-                    client_key=active.cert.key.key,
-                    ca_cert=active.ca_cert.cert,
-                )
-
-    def release_endpoint(self, build_id: str, platform: str = "PLATFORM_AMD64") -> None:
-        platform_enum = buildkit_pb2.Platform.Value(platform)
-        request = buildkit_pb2.ReleaseEndpointRequest(
-            build_id=build_id, platform=platform_enum
-        )
-        self.buildkit.ReleaseEndpoint(request)
+        return self.build.finish_build(build_id, error=error)
 
     def share_build(self, build_id: str) -> str:
-        request = core_build_pb2.ShareBuildRequest(build_id=build_id)
-        response = self.core_build.ShareBuild(request)
-        return response.share_url
+        return self.core_build.share_build(build_id)
 
     def stop_sharing_build(self, build_id: str) -> None:
-        request = core_build_pb2.StopSharingBuildRequest(build_id=build_id)
-        self.core_build.StopSharingBuild(request)
+        return self.core_build.stop_sharing_build(build_id)
 
-    def get_build(self, build_id: str) -> Dict:
-        request = core_build_pb2.GetBuildRequest(build_id=build_id)
-        response = self.core_build.GetBuild(request)
-        return self._build_to_dict(response.build)
+    def get_build(self, build_id: str) -> BuildInfo:
+        return self.core_build.get_build(build_id)
 
     def list_builds(
         self,
         project_id: str,
-        page_size: Optional[int] = None,
-        page_token: Optional[str] = None,
-    ) -> tuple[List[Dict], Optional[str]]:
-        request = core_build_pb2.ListBuildsRequest(
-            project_id=project_id, page_size=page_size, page_token=page_token
-        )
-        response = self.core_build.ListBuilds(request)
-        builds = [self._build_to_dict(build) for build in response.builds]
-        return builds, response.next_page_token if response.next_page_token else None
+    ) -> List[BuildInfo]:
+        return self.core_build.list_builds(project_id)
 
-    def close(self):
-        self.channel.close()
+    def create_endpoint(
+        self, build_id: str, platform: Optional[str] = None
+    ) -> Endpoint:
+        return self.buildkit.create_endpoint(build_id, platform)
 
 
 class AsyncClient(BaseClient):
     def __init__(
         self,
         host: str = DEPOT_GRPC_HOST,
-        port: int = 443,
+        port: int = DEPOT_GRPC_PORT,
     ):
         credentials = self._create_channel_credentials()
         self.channel = grpc.aio.secure_channel(f"{host}:{port}", credentials)
+        self.build = AsyncBuildService(self.channel)
+        self.core_build = AsyncCoreBuildService(self.channel)
+        self.project = AsyncProjectService(self.channel)
 
-        self.build = build_pb2_grpc.BuildServiceStub(self.channel)
-        self.buildkit = buildkit_pb2_grpc.BuildKitServiceStub(self.channel)
-        self.core_build = core_build_pb2_grpc.BuildServiceStub(self.channel)
-        self.core_project = core_project_pb2_grpc.ProjectServiceStub(self.channel)
-
-    async def list_projects(self) -> List[Dict]:
-        request = core_project_pb2.ListProjectsRequest()
-        response = await self.core_project.ListProjects(request)
-        return [
-            {
-                "project_id": proj.project_id,
-                "organization_id": proj.organization_id,
-                "name": proj.name,
-                "region_id": proj.region_id,
-                "created_at": self._proto_to_datetime(proj.created_at),
-                "hardware": core_project_pb2.Hardware.Name(proj.hardware),
-            }
-            for proj in response.projects
-        ]
+    async def list_projects(self) -> List[ProjectInfo]:
+        return await self.project.list_projects()
 
     async def create_build(self, project_id: str) -> tuple[str, str]:
-        request = build_pb2.CreateBuildRequest(project_id=project_id)
-        response = await self.build.CreateBuild(request)
-        return response.build_id, response.build_token
+        return await self.build.create_build(project_id)
 
     async def finish_build(self, build_id: str, error: Optional[str] = None) -> None:
-        if error:
-            error_msg = build_pb2.FinishBuildRequest.BuildError(error=error)
-            request = build_pb2.FinishBuildRequest(build_id=build_id, error=error_msg)
-        else:
-            success_msg = build_pb2.FinishBuildRequest.BuildSuccess()
-            request = build_pb2.FinishBuildRequest(
-                build_id=build_id, success=success_msg
-            )
-        await self.build.FinishBuild(request)
-
-    async def get_endpoint(
-        self, build_id: str, platform: str = "PLATFORM_AMD64"
-    ) -> AsyncIterator[BuildEndpoint]:
-        platform_enum = buildkit_pb2.Platform.Value(platform)
-        request = buildkit_pb2.GetEndpointRequest(
-            build_id=build_id, platform=platform_enum
-        )
-
-        async for response in self.buildkit.GetEndpoint(request):
-            if response.HasField("active"):
-                active = response.active
-                yield BuildEndpoint(
-                    endpoint=active.endpoint,
-                    server_name=active.server_name,
-                    client_cert=active.cert.cert.cert,
-                    client_key=active.cert.key.key,
-                    ca_cert=active.ca_cert.cert,
-                )
-
-    async def release_endpoint(
-        self, build_id: str, platform: str = "PLATFORM_AMD64"
-    ) -> None:
-        platform_enum = buildkit_pb2.Platform.Value(platform)
-        request = buildkit_pb2.ReleaseEndpointRequest(
-            build_id=build_id, platform=platform_enum
-        )
-        await self.buildkit.ReleaseEndpoint(request)
+        return await self.build.finish_build(build_id, error=error)
 
     async def share_build(self, build_id: str) -> str:
-        request = core_build_pb2.ShareBuildRequest(build_id=build_id)
-        response = await self.core_build.ShareBuild(request)
-        return response.share_url
+        return await self.core_build.share_build(build_id)
 
     async def stop_sharing_build(self, build_id: str) -> None:
-        request = core_build_pb2.StopSharingBuildRequest(build_id=build_id)
-        await self.core_build.StopSharingBuild(request)
+        return await self.core_build.stop_sharing_build(build_id)
 
-    async def get_build(self, build_id: str) -> Dict:
-        request = core_build_pb2.GetBuildRequest(build_id=build_id)
-        response = await self.core_build.GetBuild(request)
-        return self._build_to_dict(response.build)
+    async def get_build(self, build_id: str) -> BuildInfo:
+        return await self.core_build.get_build(build_id)
 
     async def list_builds(
         self,
         project_id: str,
-        page_size: Optional[int] = None,
-        page_token: Optional[str] = None,
-    ) -> tuple[List[Dict], Optional[str]]:
-        request = core_build_pb2.ListBuildsRequest(
-            project_id=project_id, page_size=page_size, page_token=page_token
-        )
-        response = await self.core_build.ListBuilds(request)
-        builds = [self._build_to_dict(build) for build in response.builds]
-        return builds, response.next_page_token if response.next_page_token else None
+    ) -> List[BuildInfo]:
+        return await self.core_build.list_builds(project_id)
 
     async def close(self):
         await self.channel.close()
 
 
 if __name__ == "__main__":
-    client = Client()
-    print(client.list_projects())
-    print(client.list_builds("749dxclhrj"))
-    client.close()
+    with Client() as client:
+        client.list_projects()
+        project_id = "749dxclhrj"
+        client.list_builds(project_id)
+        with client.create_build(project_id) as build:
+            with build.get_endpoint() as endpoint:
+                print(repr(endpoint))

@@ -14,6 +14,7 @@ api:
 	find depot_client/api -type f -name "*_pb2*.py" -exec sed -i '' 's/from depot\./from depot_client.api.depot./g' {} +
 
 build:
+	rm -rf dist
 	python -m build
 
 publish: build
