@@ -22,6 +22,9 @@ test = [
 [tool.setuptools]
 packages = ["depot_client"]
 
+[tool.setuptools.package-data]
+your_package = ["py.typed"]
+
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
