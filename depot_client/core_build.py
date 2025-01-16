@@ -34,7 +34,7 @@ class CoreBuildService:
         return [BuildInfo(build.build_id, build.status) for build in response.builds]
 
     def get_build(self, build_id: str) -> BuildInfo:
-        request = GetBuildRequest(build_id)
+        request = GetBuildRequest(build_id=build_id)
         response = self.stub.GetBuild(request)
         return BuildInfo(response.build.build_id, response.build.status)
 

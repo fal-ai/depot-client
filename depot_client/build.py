@@ -20,14 +20,16 @@ class BuildService:
 
     def finish_build(self, build_id: str, error: Optional[str] = None) -> None:
         if error is None:
-            result = FinishBuildRequest.BuildSuccess()
+            request = FinishBuildRequest(
+                build_id=build_id,
+                success=FinishBuildRequest.BuildSuccess(),
+            )
         else:
-            result = FinishBuildRequest.BuildError(error)
+            request = FinishBuildRequest(
+                build_id=build_id,
+                error=FinishBuildRequest.BuildError(error),
+            )
 
-        request = FinishBuildRequest(
-            build_id=build_id,
-            result=result,
-        )
         self.stub.FinishBuild(request)
 
 
@@ -42,12 +44,14 @@ class AsyncBuildService:
 
     async def finish_build(self, build_id: str, error: Optional[str] = None) -> None:
         if error is None:
-            result = FinishBuildRequest.BuildSuccess()
+            request = FinishBuildRequest(
+                build_id=build_id,
+                success=FinishBuildRequest.BuildSuccess(),
+            )
         else:
-            result = FinishBuildRequest.BuildError(error)
+            request = FinishBuildRequest(
+                build_id=build_id,
+                error=FinishBuildRequest.BuildError(error),
+            )
 
-        request = FinishBuildRequest(
-            build_id=build_id,
-            result=result,
-        )
         await self.stub.FinishBuild(request)
