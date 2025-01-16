@@ -28,7 +28,7 @@ class EndpointInfo:
     endpoint: str
     server_name: str
     cert: str
-    cert_key: str
+    key: str
     ca_cert: str
 
 
@@ -58,7 +58,7 @@ class BuildKitService:
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
                     cert=response.active.cert.cert,
-                    cert_key=response.active.cert.key,
+                    key=response.active.cert.key,
                     ca_cert=response.active.ca_cert,
                 )
             else:
@@ -109,7 +109,7 @@ class AsyncBuildKitService:
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
                     cert=response.active.cert.cert,
-                    cert_key=response.active.cert.key,
+                    key=response.active.cert.key,
                     ca_cert=response.active.ca_cert,
                 )
             else:
