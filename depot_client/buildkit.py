@@ -89,7 +89,7 @@ class AsyncBuildKitService:
             grpc.ssl_channel_credentials(),
             grpc.access_token_call_credentials(token),
         )
-        self.channel = grpc.secure_channel("api.depot.dev:443", creds)
+        self.channel = grpc.aio.secure_channel("api.depot.dev:443", creds)
         self.stub = BuildKitServiceStub(self.channel)
 
     async def close(self):

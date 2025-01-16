@@ -92,7 +92,7 @@ class AsyncProjectService:
 
     async def list_projects(self) -> List[ProjectInfo]:
         request = project_pb2.ListProjectsRequest()
-        response = self.stub.ListProjects(request)
+        response = await self.stub.ListProjects(request)
         return [
             ProjectInfo(
                 project_id=project.project_id,
@@ -100,7 +100,7 @@ class AsyncProjectService:
                 name=project.name,
                 region_id=project.region_id,
             )
-            async for project in response.projects
+            for project in response.projects
         ]
 
     async def create_project(self, name: str, region_id: str) -> ProjectInfo:

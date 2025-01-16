@@ -181,11 +181,21 @@ class AsyncClient(BaseClient):
         self.core_build = AsyncCoreBuildService(self.channel)
         self.project = AsyncProjectService(self.channel)
 
+    async def close(self):
+        await self.channel.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.close()
+
     async def list_projects(self) -> List[ProjectInfo]:
         return await self.project.list_projects()
 
-    async def create_build(self, project_id: str) -> tuple[str, str]:
-        return await self.build.create_build(project_id)
+    async def create_build(self, project_id: str) -> AsyncBuild:
+        build_id, build_token = await self.build.create_build(project_id)
+        return AsyncBuild(self.build, build_id=build_id, build_token=build_token)
 
     async def finish_build(self, build_id: str, error: Optional[str] = None) -> None:
         return await self.build.finish_build(build_id, error=error)
@@ -205,11 +215,8 @@ class AsyncClient(BaseClient):
     ) -> List[BuildInfo]:
         return await self.core_build.list_builds(project_id)
 
-    async def close(self):
-        await self.channel.close()
 
-
-if __name__ == "__main__":
+def _main():
     with Client() as client:
         client.list_projects()
         project_id = "749dxclhrj"
@@ -217,3 +224,20 @@ if __name__ == "__main__":
         with client.create_build(project_id) as build:
             with build.get_endpoint() as endpoint:
                 print(repr(endpoint))
+
+
+async def _async_main():
+    async with AsyncClient() as client:
+        await client.list_projects()
+        project_id = "749dxclhrj"
+        await client.list_builds(project_id)
+        async with await client.create_build(project_id) as build:
+            async with await build.get_endpoint() as endpoint:
+                print(repr(endpoint))
+
+
+if __name__ == "__main__":
+    _main()
+    import asyncio
+
+    asyncio.run(_async_main())
