@@ -107,10 +107,13 @@ class AsyncBuild:
 
 
 class BaseClient:
-    def _create_channel_credentials(self) -> grpc.ChannelCredentials:
+    def _create_channel_credentials(
+        self, token: Optional[str] = None
+    ) -> grpc.ChannelCredentials:
         channel_creds = grpc.ssl_channel_credentials()
-        token = os.getenv("DEPOT_API_TOKEN")
-        call_creds = grpc.access_token_call_credentials(token)
+        call_creds = grpc.access_token_call_credentials(
+            token or os.getenv("DEPOT_API_TOKEN")
+        )
         return grpc.composite_channel_credentials(channel_creds, call_creds)
 
     def _proto_to_datetime(self, timestamp: Timestamp) -> datetime:
@@ -122,8 +125,9 @@ class Client(BaseClient):
         self,
         host: str = DEPOT_GRPC_HOST,
         port: int = DEPOT_GRPC_PORT,
+        token: Optional[str] = None,
     ):
-        credentials = self._create_channel_credentials()
+        credentials = self._create_channel_credentials(token)
         self.channel = grpc.secure_channel(f"{host}:{port}", credentials)
         self.build = BuildService(self.channel)
         self.core_build = CoreBuildService(self.channel)
@@ -174,8 +178,9 @@ class AsyncClient(BaseClient):
         self,
         host: str = DEPOT_GRPC_HOST,
         port: int = DEPOT_GRPC_PORT,
+        token: Optional[str] = None,
     ):
-        credentials = self._create_channel_credentials()
+        credentials = self._create_channel_credentials(token)
         self.channel = grpc.aio.secure_channel(f"{host}:{port}", credentials)
         self.build = AsyncBuildService(self.channel)
         self.core_build = AsyncCoreBuildService(self.channel)
