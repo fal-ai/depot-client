@@ -2,7 +2,6 @@ protos:
 	buf export buf.build/depot/api -o depot_client/protos
 
 api:
-	rm -rf depot_client/api/*
 	python -m grpc_tools.protoc \
 	    --python_out=depot_client/api \
 	    --grpc_python_out=depot_client/api \
