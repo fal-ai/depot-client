@@ -57,9 +57,9 @@ class BuildKitService:
                 return EndpointInfo(
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
-                    cert=response.active.cert.cert,
-                    key=response.active.cert.key,
-                    ca_cert=response.active.ca_cert,
+                    cert=response.active.cert.cert.cert,
+                    key=response.active.cert.key.key,
+                    ca_cert=response.active.ca_cert.cert,
                 )
             else:
                 raise ValueError("Unknown response type: {response}")
@@ -108,9 +108,9 @@ class AsyncBuildKitService:
                 return EndpointInfo(
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
-                    cert=response.active.cert.cert,
-                    key=response.active.cert.key,
-                    ca_cert=response.active.ca_cert,
+                    cert=response.active.cert.cert.cert,
+                    key=response.active.cert.key.key,
+                    ca_cert=response.active.ca_cert.cert,
                 )
             else:
                 raise ValueError("Unknown response type: {response}")

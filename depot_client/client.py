@@ -224,6 +224,9 @@ def _main():
         with client.create_build(project_id) as build:
             with build.get_endpoint() as endpoint:
                 print(repr(endpoint))
+                assert isinstance(endpoint.cert, str)
+                assert isinstance(endpoint.key, str)
+                assert isinstance(endpoint.ca_cert, str)
 
 
 async def _async_main():
@@ -234,6 +237,9 @@ async def _async_main():
         async with await client.create_build(project_id) as build:
             async with await build.get_endpoint() as endpoint:
                 print(repr(endpoint))
+                assert isinstance(endpoint.cert, str)
+                assert isinstance(endpoint.key, str)
+                assert isinstance(endpoint.ca_cert, str)
 
 
 if __name__ == "__main__":
