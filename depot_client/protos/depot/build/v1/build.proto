@@ -1,0 +1,32 @@
+syntax = "proto3";
+package depot.build.v1;
+
+service BuildService {
+  rpc CreateBuild(CreateBuildRequest) returns (CreateBuildResponse);
+  rpc FinishBuild(FinishBuildRequest) returns (FinishBuildResponse);
+}
+
+message CreateBuildRequest {
+  string project_id = 1;
+}
+
+message CreateBuildResponse {
+  string build_id = 1;
+  string build_token = 2;
+}
+
+message FinishBuildRequest {
+  string build_id = 1;
+  oneof result {
+    BuildSuccess success = 2;
+    BuildError error = 3;
+  }
+
+  message BuildSuccess {}
+
+  message BuildError {
+    string error = 1;
+  }
+}
+
+message FinishBuildResponse {}
