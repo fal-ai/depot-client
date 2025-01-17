@@ -19,11 +19,12 @@ test = [
     "pytest-asyncio>=0.21.0"
 ]
 
-[tool.setuptools]
-packages = ["depot_client"]
+[tool.setuptools.packages.find]
+include = ["depot_client"]
+namespaces = false
 
 [tool.setuptools.package-data]
-your_package = ["py.typed"]
+depot_client = ["py.typed"]
 
 [tool.setuptools_scm]
 
