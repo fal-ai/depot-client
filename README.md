@@ -1,2 +1,2 @@
-# python-depot-dev
+# depot-client
 Python Client for depot.dev
