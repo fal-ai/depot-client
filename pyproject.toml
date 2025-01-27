@@ -13,6 +13,10 @@ dependencies = [
     "grpcio-tools>=1.54.0"
 ]
 
+[project.urls]
+Issues = "https://github.com/fal-ai/depot-client/issues"
+Source = "https://github.com/fal-ai/depot-client"
+
 [project.optional-dependencies]
 test = [
     "pytest>=7.0.0",
