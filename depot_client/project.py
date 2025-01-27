@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 import grpc
 
@@ -15,6 +15,28 @@ class ProjectInfo:
     region_id: str
     # created_at: str
     # hardware: str
+
+
+@dataclass
+class TokenInfo:
+    token_id: str
+    description: str
+
+
+@dataclass
+class TokenCreationInfo:
+    token_id: str
+    secret: str
+
+
+@dataclass
+class TrustPolicyInfo:
+    trust_policy_id: str
+    provider: Union[
+        project_pb2.TrustPolicy.GitHub,
+        project_pb2.TrustPolicy.CircleCI,
+        project_pb2.TrustPolicy.Buildkite,
+    ]
 
 
 class ProjectService:
@@ -64,26 +86,71 @@ class ProjectService:
         request = project_pb2.ResetProjectRequest(project_id=project_id)
         self.stub.ResetProject(request)
 
-    def list_trust_policies():
-        pass
+    def list_trust_policies(self, project_id: str) -> List[TrustPolicyInfo]:
+        request = project_pb2.ListTrustPoliciesRequest(project_id=project_id)
+        response = self.stub.ListTrustPolicies(request)
+        return [
+            TrustPolicyInfo(
+                trust_policy_id=policy.trust_policy_id,
+                provider=policy.WhichOneof("provider"),
+            )
+            for policy in response.trust_policies
+        ]
 
-    def add_trust_policy():
-        pass
+    def add_trust_policy(
+        self,
+        project_id: str,
+        provider: Union[
+            project_pb2.TrustPolicy.GitHub,
+            project_pb2.TrustPolicy.CircleCI,
+            project_pb2.TrustPolicy.Buildkite,
+        ],
+    ) -> TrustPolicyInfo:
+        request = project_pb2.AddTrustPolicyRequest(project_id=project_id)
 
-    def remove_trust_policy():
-        pass
+        if isinstance(provider, project_pb2.TrustPolicy.GitHub):
+            request.github.CopyFrom(provider)
+        elif isinstance(provider, project_pb2.TrustPolicy.CircleCI):
+            request.circleci.CopyFrom(provider)
+        elif isinstance(provider, project_pb2.TrustPolicy.Buildkite):
+            request.buildkite.CopyFrom(provider)
 
-    def list_tokens():
-        pass
+        response = self.stub.AddTrustPolicy(request)
+        return TrustPolicyInfo(
+            trust_policy_id=response.trust_policy.trust_policy_id,
+            provider=response.trust_policy.WhichOneof("provider"),
+        )
 
-    def create_token():
-        pass
+    def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
+        request = project_pb2.RemoveTrustPolicyRequest(
+            project_id=project_id, trust_policy_id=trust_policy_id
+        )
+        self.stub.RemoveTrustPolicy(request)
 
-    def update_token():
-        pass
+    def list_tokens(self, project_id: str) -> List[TokenInfo]:
+        request = project_pb2.ListTokensRequest(project_id=project_id)
+        response = self.stub.ListTokens(request)
+        return [
+            TokenInfo(token_id=token.token_id, description=token.description)
+            for token in response.tokens
+        ]
 
-    def delete_token():
-        pass
+    def create_token(self, project_id: str, description: str) -> TokenCreationInfo:
+        request = project_pb2.CreateTokenRequest(
+            project_id=project_id, description=description
+        )
+        response = self.stub.CreateToken(request)
+        return TokenCreationInfo(token_id=response.token_id, secret=response.secret)
+
+    def update_token(self, token_id: str, description: str) -> None:
+        request = project_pb2.UpdateTokenRequest(
+            token_id=token_id, description=description
+        )
+        self.stub.UpdateToken(request)
+
+    def delete_token(self, token_id: str) -> None:
+        request = project_pb2.DeleteTokenRequest(token_id=token_id)
+        self.stub.DeleteToken(request)
 
 
 class AsyncProjectService:
@@ -135,23 +202,70 @@ class AsyncProjectService:
         request = project_pb2.ResetProjectRequest(project_id=project_id)
         await self.stub.ResetProject(request)
 
-    async def list_trust_policies():
-        pass
+    async def list_trust_policies(self, project_id: str) -> List[TrustPolicyInfo]:
+        request = project_pb2.ListTrustPoliciesRequest(project_id=project_id)
+        response = await self.stub.ListTrustPolicies(request)
+        return [
+            TrustPolicyInfo(
+                trust_policy_id=policy.trust_policy_id,
+                provider=policy.WhichOneof("provider"),
+            )
+            for policy in response.trust_policies
+        ]
 
-    async def add_trust_policy():
-        pass
+    async def add_trust_policy(
+        self,
+        project_id: str,
+        provider: Union[
+            project_pb2.TrustPolicy.GitHub,
+            project_pb2.TrustPolicy.CircleCI,
+            project_pb2.TrustPolicy.Buildkite,
+        ],
+    ) -> TrustPolicyInfo:
+        request = project_pb2.AddTrustPolicyRequest(project_id=project_id)
 
-    async def remove_trust_policy():
-        pass
+        if isinstance(provider, project_pb2.TrustPolicy.GitHub):
+            request.github.CopyFrom(provider)
+        elif isinstance(provider, project_pb2.TrustPolicy.CircleCI):
+            request.circleci.CopyFrom(provider)
+        elif isinstance(provider, project_pb2.TrustPolicy.Buildkite):
+            request.buildkite.CopyFrom(provider)
 
-    async def list_tokens():
-        pass
+        response = await self.stub.AddTrustPolicy(request)
+        return TrustPolicyInfo(
+            trust_policy_id=response.trust_policy.trust_policy_id,
+            provider=response.trust_policy.WhichOneof("provider"),
+        )
 
-    async def create_token():
-        pass
+    async def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
+        request = project_pb2.RemoveTrustPolicyRequest(
+            project_id=project_id, trust_policy_id=trust_policy_id
+        )
+        await self.stub.RemoveTrustPolicy(request)
 
-    async def update_token():
-        pass
+    async def list_tokens(self, project_id: str) -> List[TokenInfo]:
+        request = project_pb2.ListTokensRequest(project_id=project_id)
+        response = await self.stub.ListTokens(request)
+        return [
+            TokenInfo(token_id=token.token_id, description=token.description)
+            for token in response.tokens
+        ]
 
-    async def delete_token():
-        pass
+    async def create_token(
+        self, project_id: str, description: str
+    ) -> TokenCreationInfo:
+        request = project_pb2.CreateTokenRequest(
+            project_id=project_id, description=description
+        )
+        response = await self.stub.CreateToken(request)
+        return TokenCreationInfo(token_id=response.token_id, secret=response.secret)
+
+    async def update_token(self, token_id: str, description: str) -> None:
+        request = project_pb2.UpdateTokenRequest(
+            token_id=token_id, description=description
+        )
+        await self.stub.UpdateToken(request)
+
+    async def delete_token(self, token_id: str) -> None:
+        request = project_pb2.DeleteTokenRequest(token_id=token_id)
+        await self.stub.DeleteToken(request)
