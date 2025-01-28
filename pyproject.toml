@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "depot_client"
+readme = "README.md"
 dynamic = ["version"]
 description = "Python client for depot.dev API"
 requires-python = ">=3.8"
