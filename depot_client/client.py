@@ -1,7 +1,10 @@
 import os
+import threading
+import time
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import AsyncIterator, Iterator, List, Optional
 
 import grpc
 import grpc.aio
@@ -15,6 +18,8 @@ from depot_client.project import AsyncProjectService, ProjectInfo, ProjectServic
 DEPOT_GRPC_HOST = "api.depot.dev"
 DEPOT_GRPC_PORT = 443
 
+REPORT_HEALTH_INTERVAL = 60
+
 
 @dataclass
 class Endpoint(EndpointInfo):
@@ -22,10 +27,20 @@ class Endpoint(EndpointInfo):
     platform: str
     buildkit: BuildKitService
 
+    def _report_health(self):
+        while not self._stop_health.is_set():
+            self.buildkit.report_health(self.build_id, self.platform)
+            time.sleep(REPORT_HEALTH_INTERVAL)
+
     def __enter__(self):
+        self._health_thread = threading.Thread(target=self._report_health, daemon=True)
+        self._stop_health = threading.Event()
+        self._health_thread.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self._stop_health.set()
+        self._health_thread.join()
         self.close()
 
     def close(self):
@@ -38,10 +53,17 @@ class AsyncEndpoint(EndpointInfo):
     platform: str
     buildkit: BuildKitService
 
+    async def _report_health(self):
+        while True:
+            await self.buildkit.report_health(self.build_id, self.platform)
+            await asyncio.sleep(REPORT_HEALTH_INTERVAL)
+
     async def __aenter__(self):
+        self._health_task = asyncio.create_task(self._report_health())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        self._health_task.cancel()
         await self.close()
 
     async def close(self):
@@ -167,10 +189,13 @@ class Client(BaseClient):
     ) -> List[BuildInfo]:
         return self.core_build.list_builds(project_id)
 
+    @contextmanager
     def create_endpoint(
-        self, build_id: str, platform: Optional[str] = None
-    ) -> Endpoint:
-        return self.buildkit.create_endpoint(build_id, platform)
+        self, project_id: str, platform: Optional[str] = None
+    ) -> Iterator[Endpoint]:
+        with self.create_build(project_id) as build:
+            with build.get_endpoint(platform=platform) as endpoint:
+                yield endpoint
 
 
 class AsyncClient(BaseClient):
@@ -220,18 +245,25 @@ class AsyncClient(BaseClient):
     ) -> List[BuildInfo]:
         return await self.core_build.list_builds(project_id)
 
+    @asynccontextmanager
+    async def create_endpoint(
+        self, project_id: str, platform: Optional[str] = None
+    ) -> AsyncIterator[AsyncEndpoint]:
+        async with self.create_build(project_id) as build:
+            async with await build.get_endpoint(platform=platform) as endpoint:
+                yield endpoint
+
 
 def _main():
     with Client() as client:
         client.list_projects()
         project_id = "749dxclhrj"
         client.list_builds(project_id)
-        with client.create_build(project_id) as build:
-            with build.get_endpoint() as endpoint:
-                print(repr(endpoint))
-                assert isinstance(endpoint.cert, str)
-                assert isinstance(endpoint.key, str)
-                assert isinstance(endpoint.ca_cert, str)
+        with client.create_endpoint(project_id) as endpoint:
+            print(repr(endpoint))
+            assert isinstance(endpoint.cert, str)
+            assert isinstance(endpoint.key, str)
+            assert isinstance(endpoint.ca_cert, str)
 
 
 async def _async_main():
