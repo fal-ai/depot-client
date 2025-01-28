@@ -1,13 +1,14 @@
-import pytest
-import grpc
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, Mock, patch
+
+import grpc
+import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from depot_client.api.depot.build.v1 import build_pb2
 from depot_client.api.depot.buildkit.v1 import buildkit_pb2
 from depot_client.api.depot.core.v1 import build_pb2 as core_build_pb2
-from depot_client.client import Client, AsyncClient, BuildEndpoint
+from depot_client.client import AsyncClient, BuildEndpoint, Client
 
 
 def create_timestamp(dt: datetime) -> Timestamp:
