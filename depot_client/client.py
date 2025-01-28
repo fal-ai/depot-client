@@ -19,6 +19,7 @@ DEPOT_GRPC_HOST = "api.depot.dev"
 DEPOT_GRPC_PORT = 443
 
 REPORT_HEALTH_INTERVAL = 60
+REPORT_HEALTH_THREAD_CANCEL_TIMEOUT = 0.1
 
 
 @dataclass
@@ -40,7 +41,7 @@ class Endpoint(EndpointInfo):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._stop_health.set()
-        self._health_thread.join()
+        self._health_thread.join(timeout=REPORT_HEALTH_THREAD_CANCEL_TIMEOUT)
         self.close()
 
     def close(self):
