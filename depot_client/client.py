@@ -1,3 +1,4 @@
+import asyncio
 import os
 import threading
 import time
@@ -282,6 +283,4 @@ async def _async_main():
 
 if __name__ == "__main__":
     _main()
-    import asyncio
-
     asyncio.run(_async_main())
