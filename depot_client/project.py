@@ -13,8 +13,8 @@ class ProjectInfo:
     organization_id: str
     name: str
     region_id: str
-    # created_at: str
-    # hardware: str
+    created_at: str
+    hardware: str
 
 
 @dataclass
@@ -52,6 +52,8 @@ class ProjectService:
                 organization_id=project.organization_id,
                 name=project.name,
                 region_id=project.region_id,
+                created_at=project.created_at,
+                hardware=project.hardware,
             )
             for project in response.projects
         ]
@@ -64,6 +66,8 @@ class ProjectService:
             organization_id=response.project.organization_id,
             name=response.project.name,
             region_id=response.project.region_id,
+            created_at=response.project.created_at,
+            hardware=response.project.hardware,
         )
 
     def update_project(self, project_id: str, name: str, region_id: str) -> ProjectInfo:
@@ -76,6 +80,8 @@ class ProjectService:
             organization_id=response.project.organization_id,
             name=response.project.name,
             region_id=response.project.region_id,
+            created_at=response.project.created_at,
+            hardware=response.project.hardware,
         )
 
     def delete_project(self, project_id: str) -> None:
@@ -166,6 +172,8 @@ class AsyncProjectService:
                 organization_id=project.organization_id,
                 name=project.name,
                 region_id=project.region_id,
+                created_at=project.created_at,
+                hardware=project.hardware,
             )
             for project in response.projects
         ]
@@ -178,6 +186,8 @@ class AsyncProjectService:
             organization_id=response.project.organization_id,
             name=response.project.name,
             region_id=response.project.region_id,
+            created_at=response.project.created_at,
+            hardware=response.project.hardware,
         )
 
     async def update_project(
@@ -192,6 +202,8 @@ class AsyncProjectService:
             organization_id=response.project.organization_id,
             name=response.project.name,
             region_id=response.project.region_id,
+            created_at=response.project.created_at,
+            hardware=response.project.hardware,
         )
 
     async def delete_project(self, project_id: str) -> None:

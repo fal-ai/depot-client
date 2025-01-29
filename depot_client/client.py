@@ -258,7 +258,7 @@ class AsyncClient(BaseClient):
 
 def _main():
     with Client() as client:
-        client.list_projects()
+        print(client.list_projects())
         project_id = "749dxclhrj"
         client.list_builds(project_id)
         with client.create_endpoint(project_id) as endpoint:
@@ -270,7 +270,7 @@ def _main():
 
 async def _async_main():
     async with AsyncClient() as client:
-        await client.list_projects()
+        print(await client.list_projects())
         project_id = "749dxclhrj"
         await client.list_builds(project_id)
         async with await client.create_build(project_id) as build:
