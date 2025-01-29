@@ -64,10 +64,9 @@ asyncio.run(main())
 
 ## Features
 
-- BuildKit endpoint provisioning with automatic TLS certificate management
 - Synchronous and asynchronous APIs
-- Automatic health reporting and cleanup
-- Platform-specific endpoints (linux/amd64, linux/arm64, etc)
+- Easy BuildKit endpoint creation
+- [Python bindings](https://github.com/fal-ai/depot-client/tree/main/depot_client/api) for [depot's gRPC](https://buf.build/depot/api) as well as [friendly pythonic wrappers](https://github.com/fal-ai/depot-client/blob/main/depot_client/project.py)
 
 ## API Reference
 
