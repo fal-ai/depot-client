@@ -74,12 +74,14 @@ class AsyncEndpoint(EndpointInfo):
 
 class Build:
     def __init__(self, build_service, build_id: str, build_token: str):
+        self.build_service = build_service
         self.build_id = build_id
         self.build_token = build_token
         self.buildkit = BuildKitService(build_token)
 
     def close(self):
         self.buildkit.close()
+        self.build_service.finish_build(self.build_id)
 
     def __enter__(self):
         return self
@@ -103,12 +105,14 @@ class Build:
 
 class AsyncBuild:
     def __init__(self, build_service, build_id: str, build_token: str):
+        self.build_service = build_service
         self.build_id = build_id
         self.build_token = build_token
         self.buildkit = AsyncBuildKitService(build_token)
 
     async def close(self):
         await self.buildkit.close()
+        await self.build_service.finish_build(self.build_id)
 
     async def __aenter__(self):
         return self
