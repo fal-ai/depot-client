@@ -29,6 +29,7 @@ with Client(token=DEPOT_API_TOKEN) as client:
 
         # Use with buildctl
         # buildctl --addr endpoint.endpoint \
+        #     --tlsservername endpoint.server_name \
         #     --tlscacert ca.crt \
         #     --tlscert client.crt \
         #     --tlskey client.key \
@@ -54,6 +55,7 @@ async def main():
 
             # Use with buildctl
             # buildctl --addr endpoint.endpoint \
+            #     --tlsservername endpoint.server_name \
             #     --tlscacert ca.crt \
             #     --tlscert client.crt \
             #     --tlskey client.key \
