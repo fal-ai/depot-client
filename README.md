@@ -51,12 +51,21 @@ import aiofiles
 
 async with AsyncClient(token=DEPOT_API_TOKEN) as client:
     async with await client.create_endpoint(project_id=PROJECT_ID) as endpoint:
+        # Write certificates to files
         async with aiofiles.open("client.crt", "w") as f:
             await f.write(endpoint.cert)
         async with aiofiles.open("client.key", "w") as f:
             await f.write(endpoint.key)
         async with aiofiles.open("ca.crt", "w") as f:
             await f.write(endpoint.ca_cert)
+
+        # Use with buildctl:
+        # buildctl --addr endpoint.endpoint \
+        #     --tlsservername endpoint.server_name \
+        #     --tlscacert ca.crt \
+        #     --tlscert client.crt \
+        #     --tlskey client.key \
+        #     build --frontend dockerfile.v0
 ```
 
 ### Project Operations
