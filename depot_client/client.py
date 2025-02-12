@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import AsyncIterator, Iterator, List, Optional
+from typing import AsyncIterator, Iterator, List, Optional, Union
 
 import grpc
 import grpc.aio
@@ -14,7 +14,14 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from depot_client.build import AsyncBuildService, BuildService
 from depot_client.buildkit import AsyncBuildKitService, BuildKitService, EndpointInfo
 from depot_client.core_build import AsyncCoreBuildService, BuildInfo, CoreBuildService
-from depot_client.project import AsyncProjectService, ProjectInfo, ProjectService
+from depot_client.project import (
+    AsyncProjectService,
+    ProjectInfo,
+    ProjectService,
+    TokenCreationInfo,
+    TokenInfo,
+    TrustPolicy,
+)
 
 DEPOT_GRPC_HOST = "api.depot.dev"
 DEPOT_GRPC_PORT = 443
@@ -203,6 +210,81 @@ class Client(BaseClient):
             with build.get_endpoint(platform=platform) as endpoint:
                 yield endpoint
 
+    def get_project(self, project_id: str) -> ProjectInfo:
+        return self.project.get_project(project_id)
+
+    def create_project(
+        self,
+        name: str,
+        organization_id: Optional[str] = None,
+        region_id: Optional[str] = None,
+        cache_policy: Optional[dict] = None,
+        hardware: Optional[str] = None,
+    ) -> ProjectInfo:
+        return self.project.create_project(
+            name=name,
+            organization_id=organization_id,
+            region_id=region_id,
+            cache_policy=cache_policy,
+            hardware=hardware,
+        )
+
+    def update_project(
+        self,
+        project_id: str,
+        name: Optional[str] = None,
+        region_id: Optional[str] = None,
+        cache_policy: Optional[dict] = None,
+        hardware: Optional[str] = None,
+    ) -> ProjectInfo:
+        return self.project.update_project(
+            project_id=project_id,
+            name=name,
+            region_id=region_id,
+            cache_policy=cache_policy,
+            hardware=hardware,
+        )
+
+    def delete_project(self, project_id: str) -> None:
+        return self.project.delete_project(project_id)
+
+    def reset_project(self, project_id: str) -> None:
+        return self.project.reset_project(project_id)
+
+    def list_trust_policies(self, project_id: str) -> List[TrustPolicy]:
+        return self.project.list_trust_policies(project_id)
+
+    def add_trust_policy(
+        self,
+        project_id: str,
+        provider: Union[dict, None] = None,
+        buildkite: Optional[dict] = None,
+        circleci: Optional[dict] = None,
+        github: Optional[dict] = None,
+    ) -> TrustPolicy:
+        return self.project.add_trust_policy(
+            project_id=project_id,
+            provider=provider,
+            buildkite=buildkite,
+            circleci=circleci,
+            github=github,
+        )
+
+    def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
+        return self.project.remove_trust_policy(project_id, trust_policy_id)
+
+    def list_tokens(self, project_id: str) -> List[TokenInfo]:
+        return self.project.list_tokens(project_id)
+
+    def create_token(self, project_id: str, description: str) -> TokenCreationInfo:
+        return self.project.create_token(project_id, description)
+
+    def update_token(self, token_id: str, description: str) -> None:
+        return self.project.update_token(token_id, description)
+
+    def delete_token(self, token_id: str) -> None:
+        return self.project.delete_token(token_id)
+
 
 class AsyncClient(BaseClient):
     def __init__(
@@ -258,6 +340,83 @@ class AsyncClient(BaseClient):
         async with self.create_build(project_id) as build:
             async with await build.get_endpoint(platform=platform) as endpoint:
                 yield endpoint
+
+    async def get_project(self, project_id: str) -> ProjectInfo:
+        return await self.project.get_project(project_id)
+
+    async def create_project(
+        self,
+        name: str,
+        organization_id: Optional[str] = None,
+        region_id: Optional[str] = None,
+        cache_policy: Optional[dict] = None,
+        hardware: Optional[str] = None,
+    ) -> ProjectInfo:
+        return await self.project.create_project(
+            name=name,
+            organization_id=organization_id,
+            region_id=region_id,
+            cache_policy=cache_policy,
+            hardware=hardware,
+        )
+
+    async def update_project(
+        self,
+        project_id: str,
+        name: Optional[str] = None,
+        region_id: Optional[str] = None,
+        cache_policy: Optional[dict] = None,
+        hardware: Optional[str] = None,
+    ) -> ProjectInfo:
+        return await self.project.update_project(
+            project_id=project_id,
+            name=name,
+            region_id=region_id,
+            cache_policy=cache_policy,
+            hardware=hardware,
+        )
+
+    async def delete_project(self, project_id: str) -> None:
+        return await self.project.delete_project(project_id)
+
+    async def reset_project(self, project_id: str) -> None:
+        return await self.project.reset_project(project_id)
+
+    async def list_trust_policies(self, project_id: str) -> List[TrustPolicy]:
+        return await self.project.list_trust_policies(project_id)
+
+    async def add_trust_policy(
+        self,
+        project_id: str,
+        provider: Union[dict, None] = None,
+        buildkite: Optional[dict] = None,
+        circleci: Optional[dict] = None,
+        github: Optional[dict] = None,
+    ) -> TrustPolicy:
+        return await self.project.add_trust_policy(
+            project_id=project_id,
+            provider=provider,
+            buildkite=buildkite,
+            circleci=circleci,
+            github=github,
+        )
+
+    async def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
+        return await self.project.remove_trust_policy(project_id, trust_policy_id)
+
+    async def list_tokens(self, project_id: str) -> List[TokenInfo]:
+        return await self.project.list_tokens(project_id)
+
+    async def create_token(
+        self, project_id: str, description: str
+    ) -> TokenCreationInfo:
+        return await self.project.create_token(project_id, description)
+
+    async def update_token(self, token_id: str, description: str) -> None:
+        return await self.project.update_token(token_id, description)
+
+    async def delete_token(self, token_id: str) -> None:
+        return await self.project.delete_token(token_id)
 
 
 def _main():
