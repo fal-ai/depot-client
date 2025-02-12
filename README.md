@@ -128,8 +128,8 @@ builds = client.list_builds(project_id=PROJECT_ID)
 #### Build Operations
 - `create_build(project_id: str) -> Build`: Create new build
 - `finish_build(build_id: str, error: Optional[str] = None) -> None`: Complete build
-- `share_build(build_id: str) -> str`: Get a shareable URL for the build
-- `stop_sharing_build(build_id: str) -> None`: Stop sharing the build
+- `share_build(build_id: str) -> str`: Create a shareable URL for the build
+- `stop_sharing_build(build_id: str) -> None`: Revoke the shareable URL for the build
 - `get_build(build_id: str) -> BuildInfo`: Get build info
 - `list_builds(project_id: str) -> List[BuildInfo]`: List project builds
 
