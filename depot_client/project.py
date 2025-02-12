@@ -1,10 +1,16 @@
 from dataclasses import dataclass
-from typing import List, Union
+from typing import List, Optional, Union
 
 import grpc
 
 import depot_client.api.depot.core.v1.project_pb2 as project_pb2
 import depot_client.api.depot.core.v1.project_pb2_grpc as project_pb2_grpc
+from depot_client.api.depot.core.v1.project_pb2 import (
+    Project as ProjectProto,
+)
+from depot_client.api.depot.core.v1.project_pb2 import (
+    TrustPolicy as TrustPolicyProto,
+)
 
 
 @dataclass
@@ -14,7 +20,20 @@ class ProjectInfo:
     name: str
     region_id: str
     created_at: str
-    hardware: str
+    cache_policy: Optional[dict] = None
+    hardware: Optional[str] = None
+
+    @classmethod
+    def from_proto(cls, proto: ProjectProto) -> "ProjectInfo":
+        return cls(
+            project_id=proto.project_id,
+            organization_id=proto.organization_id,
+            name=proto.name,
+            region_id=proto.region_id,
+            created_at=proto.created_at.ToDatetime().isoformat(),
+            cache_policy=proto.cache_policy if proto.HasField("cache_policy") else None,
+            hardware=proto.hardware if proto.hardware != 0 else None,
+        )
 
 
 @dataclass
@@ -30,13 +49,51 @@ class TokenCreationInfo:
 
 
 @dataclass
-class TrustPolicyInfo:
+class TrustPolicyGitHub:
+    repository_owner: str
+    repository: str
+
+
+@dataclass
+class TrustPolicyCircleCI:
+    organization_uuid: str
+    project_uuid: str
+
+
+@dataclass
+class TrustPolicyBuildkite:
+    organization_slug: str
+    pipeline_slug: str
+
+
+@dataclass
+class TrustPolicy:
     trust_policy_id: str
-    provider: Union[
-        project_pb2.TrustPolicy.GitHub,
-        project_pb2.TrustPolicy.CircleCI,
-        project_pb2.TrustPolicy.Buildkite,
-    ]
+    github: Optional[TrustPolicyGitHub] = None
+    circleci: Optional[TrustPolicyCircleCI] = None
+    buildkite: Optional[TrustPolicyBuildkite] = None
+
+    @classmethod
+    def from_proto(cls, proto: TrustPolicyProto) -> "TrustPolicy":
+        kwargs = {"trust_policy_id": proto.trust_policy_id}
+
+        if proto.HasField("github"):
+            kwargs["github"] = TrustPolicyGitHub(
+                repository_owner=proto.github.repository_owner,
+                repository=proto.github.repository,
+            )
+        elif proto.HasField("circleci"):
+            kwargs["circleci"] = TrustPolicyCircleCI(
+                organization_uuid=proto.circleci.organization_uuid,
+                project_uuid=proto.circleci.project_uuid,
+            )
+        elif proto.HasField("buildkite"):
+            kwargs["buildkite"] = TrustPolicyBuildkite(
+                organization_slug=proto.buildkite.organization_slug,
+                pipeline_slug=proto.buildkite.pipeline_slug,
+            )
+
+        return cls(**kwargs)
 
 
 class ProjectService:
@@ -46,43 +103,19 @@ class ProjectService:
     def list_projects(self) -> List[ProjectInfo]:
         request = project_pb2.ListProjectsRequest()
         response = self.stub.ListProjects(request)
-        return [
-            ProjectInfo(
-                project_id=project.project_id,
-                organization_id=project.organization_id,
-                name=project.name,
-                region_id=project.region_id,
-                created_at=project.created_at,
-                hardware=project.hardware,
-            )
-            for project in response.projects
-        ]
+        return [ProjectInfo.from_proto(project) for project in response.projects]
 
     def create_project(self, name: str, region_id: str) -> ProjectInfo:
         request = project_pb2.CreateProjectRequest(name=name, region_id=region_id)
         response = self.stub.CreateProject(request)
-        return ProjectInfo(
-            project_id=response.project.project_id,
-            organization_id=response.project.organization_id,
-            name=response.project.name,
-            region_id=response.project.region_id,
-            created_at=response.project.created_at,
-            hardware=response.project.hardware,
-        )
+        return ProjectInfo.from_proto(response.project)
 
     def update_project(self, project_id: str, name: str, region_id: str) -> ProjectInfo:
         request = project_pb2.UpdateProjectRequest(
             project_id=project_id, name=name, region_id=region_id
         )
         response = self.stub.UpdateProject(request)
-        return ProjectInfo(
-            project_id=response.project.project_id,
-            organization_id=response.project.organization_id,
-            name=response.project.name,
-            region_id=response.project.region_id,
-            created_at=response.project.created_at,
-            hardware=response.project.hardware,
-        )
+        return ProjectInfo.from_proto(response.project)
 
     def delete_project(self, project_id: str) -> None:
         request = project_pb2.DeleteProjectRequest(project_id=project_id)
@@ -92,44 +125,47 @@ class ProjectService:
         request = project_pb2.ResetProjectRequest(project_id=project_id)
         self.stub.ResetProject(request)
 
-    def list_trust_policies(self, project_id: str) -> List[TrustPolicyInfo]:
+    def list_trust_policies(self, project_id: str) -> List[TrustPolicy]:
         request = project_pb2.ListTrustPoliciesRequest(project_id=project_id)
         response = self.stub.ListTrustPolicies(request)
-        return [
-            TrustPolicyInfo(
-                trust_policy_id=policy.trust_policy_id,
-                provider=policy.WhichOneof("provider"),
-            )
-            for policy in response.trust_policies
-        ]
+        return [TrustPolicy.from_proto(policy) for policy in response.trust_policies]
 
     def add_trust_policy(
         self,
         project_id: str,
-        provider: Union[
-            project_pb2.TrustPolicy.GitHub,
-            project_pb2.TrustPolicy.CircleCI,
-            project_pb2.TrustPolicy.Buildkite,
-        ],
-    ) -> TrustPolicyInfo:
+        provider: Union[dict, None] = None,
+        buildkite: Optional[dict] = None,
+        circleci: Optional[dict] = None,
+        github: Optional[dict] = None,
+    ) -> TrustPolicy:
+        if provider:
+            # Handle legacy provider dict
+            if provider.get("type") == "github":
+                github = provider
+            elif provider.get("type") == "circleci":
+                circleci = provider
+            elif provider.get("type") == "buildkite":
+                buildkite = provider
+
         request = project_pb2.AddTrustPolicyRequest(project_id=project_id)
 
-        if isinstance(provider, project_pb2.TrustPolicy.GitHub):
-            request.github.CopyFrom(provider)
-        elif isinstance(provider, project_pb2.TrustPolicy.CircleCI):
-            request.circleci.CopyFrom(provider)
-        elif isinstance(provider, project_pb2.TrustPolicy.Buildkite):
-            request.buildkite.CopyFrom(provider)
+        if github:
+            request.github.repository_owner = github["repository_owner"]
+            request.github.repository = github["repository"]
+        elif circleci:
+            request.circleci.organization_uuid = circleci["organization_uuid"]
+            request.circleci.project_uuid = circleci["project_uuid"]
+        elif buildkite:
+            request.buildkite.organization_slug = buildkite["organization_slug"]
+            request.buildkite.pipeline_slug = buildkite["pipeline_slug"]
 
         response = self.stub.AddTrustPolicy(request)
-        return TrustPolicyInfo(
-            trust_policy_id=response.trust_policy.trust_policy_id,
-            provider=response.trust_policy.WhichOneof("provider"),
-        )
+        return TrustPolicy.from_proto(response.trust_policy)
 
     def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
         request = project_pb2.RemoveTrustPolicyRequest(
-            project_id=project_id, trust_policy_id=trust_policy_id
+            project_id=project_id,
+            trust_policy_id=trust_policy_id,
         )
         self.stub.RemoveTrustPolicy(request)
 
@@ -166,29 +202,12 @@ class AsyncProjectService:
     async def list_projects(self) -> List[ProjectInfo]:
         request = project_pb2.ListProjectsRequest()
         response = await self.stub.ListProjects(request)
-        return [
-            ProjectInfo(
-                project_id=project.project_id,
-                organization_id=project.organization_id,
-                name=project.name,
-                region_id=project.region_id,
-                created_at=project.created_at,
-                hardware=project.hardware,
-            )
-            for project in response.projects
-        ]
+        return [ProjectInfo.from_proto(project) for project in response.projects]
 
     async def create_project(self, name: str, region_id: str) -> ProjectInfo:
         request = project_pb2.CreateProjectRequest(name=name, region_id=region_id)
         response = await self.stub.CreateProject(request)
-        return ProjectInfo(
-            project_id=response.project.project_id,
-            organization_id=response.project.organization_id,
-            name=response.project.name,
-            region_id=response.project.region_id,
-            created_at=response.project.created_at,
-            hardware=response.project.hardware,
-        )
+        return ProjectInfo.from_proto(response.project)
 
     async def update_project(
         self, project_id: str, name: str, region_id: str
@@ -197,14 +216,7 @@ class AsyncProjectService:
             project_id=project_id, name=name, region_id=region_id
         )
         response = await self.stub.UpdateProject(request)
-        return ProjectInfo(
-            project_id=response.project.project_id,
-            organization_id=response.project.organization_id,
-            name=response.project.name,
-            region_id=response.project.region_id,
-            created_at=response.project.created_at,
-            hardware=response.project.hardware,
-        )
+        return ProjectInfo.from_proto(response.project)
 
     async def delete_project(self, project_id: str) -> None:
         request = project_pb2.DeleteProjectRequest(project_id=project_id)
@@ -214,44 +226,47 @@ class AsyncProjectService:
         request = project_pb2.ResetProjectRequest(project_id=project_id)
         await self.stub.ResetProject(request)
 
-    async def list_trust_policies(self, project_id: str) -> List[TrustPolicyInfo]:
+    async def list_trust_policies(self, project_id: str) -> List[TrustPolicy]:
         request = project_pb2.ListTrustPoliciesRequest(project_id=project_id)
         response = await self.stub.ListTrustPolicies(request)
-        return [
-            TrustPolicyInfo(
-                trust_policy_id=policy.trust_policy_id,
-                provider=policy.WhichOneof("provider"),
-            )
-            for policy in response.trust_policies
-        ]
+        return [TrustPolicy.from_proto(policy) for policy in response.trust_policies]
 
     async def add_trust_policy(
         self,
         project_id: str,
-        provider: Union[
-            project_pb2.TrustPolicy.GitHub,
-            project_pb2.TrustPolicy.CircleCI,
-            project_pb2.TrustPolicy.Buildkite,
-        ],
-    ) -> TrustPolicyInfo:
+        provider: Union[dict, None] = None,
+        buildkite: Optional[dict] = None,
+        circleci: Optional[dict] = None,
+        github: Optional[dict] = None,
+    ) -> TrustPolicy:
+        if provider:
+            # Handle legacy provider dict
+            if provider.get("type") == "github":
+                github = provider
+            elif provider.get("type") == "circleci":
+                circleci = provider
+            elif provider.get("type") == "buildkite":
+                buildkite = provider
+
         request = project_pb2.AddTrustPolicyRequest(project_id=project_id)
 
-        if isinstance(provider, project_pb2.TrustPolicy.GitHub):
-            request.github.CopyFrom(provider)
-        elif isinstance(provider, project_pb2.TrustPolicy.CircleCI):
-            request.circleci.CopyFrom(provider)
-        elif isinstance(provider, project_pb2.TrustPolicy.Buildkite):
-            request.buildkite.CopyFrom(provider)
+        if github:
+            request.github.repository_owner = github["repository_owner"]
+            request.github.repository = github["repository"]
+        elif circleci:
+            request.circleci.organization_uuid = circleci["organization_uuid"]
+            request.circleci.project_uuid = circleci["project_uuid"]
+        elif buildkite:
+            request.buildkite.organization_slug = buildkite["organization_slug"]
+            request.buildkite.pipeline_slug = buildkite["pipeline_slug"]
 
         response = await self.stub.AddTrustPolicy(request)
-        return TrustPolicyInfo(
-            trust_policy_id=response.trust_policy.trust_policy_id,
-            provider=response.trust_policy.WhichOneof("provider"),
-        )
+        return TrustPolicy.from_proto(response.trust_policy)
 
     async def remove_trust_policy(self, project_id: str, trust_policy_id: str) -> None:
         request = project_pb2.RemoveTrustPolicyRequest(
-            project_id=project_id, trust_policy_id=trust_policy_id
+            project_id=project_id,
+            trust_policy_id=trust_policy_id,
         )
         await self.stub.RemoveTrustPolicy(request)
 
