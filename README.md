@@ -87,7 +87,7 @@ policy = client.add_trust_policy(
 # Create and track builds
 build = client.create_build(project_id=PROJECT_ID)
 
-# Share build results
+# Get a shareable URL for the build
 share_url = client.share_build(build.build_id)
 
 # List project builds
@@ -128,8 +128,8 @@ builds = client.list_builds(project_id=PROJECT_ID)
 #### Build Operations
 - `create_build(project_id: str) -> Build`: Create new build
 - `finish_build(build_id: str, error: Optional[str] = None) -> None`: Complete build
-- `share_build(build_id: str) -> str`: Share build and get share URL
-- `stop_sharing_build(build_id: str) -> None`: Stop sharing
+- `share_build(build_id: str) -> str`: Get a shareable URL for the build
+- `stop_sharing_build(build_id: str) -> None`: Stop sharing the build
 - `get_build(build_id: str) -> BuildInfo`: Get build info
 - `list_builds(project_id: str) -> List[BuildInfo]`: List project builds
 
