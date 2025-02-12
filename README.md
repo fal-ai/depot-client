@@ -1,6 +1,6 @@
 # depot-client
 
-A Python client library for interacting with the [Depot](https://depot.dev) API, supporting both synchronous and asynchronous operations.
+Python client library for [Depot](https://depot.dev). Provides both synchronous and asynchronous APIs through an intuitive Pythonic interface.
 
 ## Installation
 
@@ -10,55 +10,20 @@ pip install depot-client
 
 ## Usage
 
-### Project Management
+### Basic Example
 
 ```python
 from depot_client import Client
 
 with Client(token=DEPOT_API_TOKEN) as client:
-    # List all projects
-    projects = client.list_projects()
-    
-    # Create a new project
+    # Create a project
     project = client.create_project(
         name="my-project",
         region_id="us-east-1"
     )
     
-    # Update project
-    updated = client.update_project(
-        project_id=project.project_id,
-        name="new-name",
-        region_id="us-west-1"
-    )
-    
-    # Manage project tokens
-    tokens = client.list_tokens(project.project_id)
-    new_token = client.create_token(
-        project_id=project.project_id,
-        description="CI/CD token"
-    )
-    
-    # Trust policies
-    policies = client.list_trust_policies(project.project_id)
-    github_policy = client.add_trust_policy(
-        project_id=project.project_id,
-        github={
-            "repository_owner": "org",
-            "repository": "repo"
-        }
-    )
-```
-
-### BuildKit Integration
-
-#### Synchronous Client
-
-```python
-from depot_client import Client
-
-with Client(token=DEPOT_API_TOKEN) as client:
-    with client.create_endpoint(project_id=PROJECT_ID, platform="amd64") as endpoint:
+    # Create a build
+    with client.create_endpoint(project_id=project.project_id) as endpoint:
         # Write certificates to files
         with open("client.crt", "w") as f:
             f.write(endpoint.cert)
@@ -67,7 +32,7 @@ with Client(token=DEPOT_API_TOKEN) as client:
         with open("ca.crt", "w") as f:
             f.write(endpoint.ca_cert)
 
-        # Use with buildctl
+        # Use with buildctl:
         # buildctl --addr endpoint.endpoint \
         #     --tlsservername endpoint.server_name \
         #     --tlscacert ca.crt \
@@ -76,86 +41,100 @@ with Client(token=DEPOT_API_TOKEN) as client:
         #     build --frontend dockerfile.v0
 ```
 
-#### Asynchronous Client
+### Async Support
+
+The library provides async versions of all operations:
 
 ```python
-import asyncio
-import aiofiles
 from depot_client import AsyncClient
+import aiofiles
 
-async def main():
-    async with AsyncClient(token=DEPOT_API_TOKEN) as client:
-        async with await client.create_endpoint(project_id=PROJECT_ID) as endpoint:
-            # Write certificates to files
-            async with aiofiles.open("client.crt", "w") as f:
-                await f.write(endpoint.cert)
-            async with aiofiles.open("client.key", "w") as f:
-                await f.write(endpoint.key)
-            async with aiofiles.open("ca.crt", "w") as f:
-                await f.write(endpoint.ca_cert)
-
-asyncio.run(main())
+async with AsyncClient(token=DEPOT_API_TOKEN) as client:
+    async with await client.create_endpoint(project_id=PROJECT_ID) as endpoint:
+        async with aiofiles.open("client.crt", "w") as f:
+            await f.write(endpoint.cert)
+        async with aiofiles.open("client.key", "w") as f:
+            await f.write(endpoint.key)
+        async with aiofiles.open("ca.crt", "w") as f:
+            await f.write(endpoint.ca_cert)
 ```
 
-### Build Management
+### Project Operations
 
 ```python
-with Client(token=DEPOT_API_TOKEN) as client:
-    # Create and manage builds
-    build = client.create_build(project_id=PROJECT_ID)
-    
-    # Share builds
-    share_url = client.share_build(build.build_id)
-    client.stop_sharing_build(build.build_id)
-    
-    # List builds
-    builds = client.list_builds(project_id=PROJECT_ID)
-    
-    # Get build info
-    build_info = client.get_build(build.build_id)
+# List projects
+projects = client.list_projects()
+
+# Create and manage tokens
+token = client.create_token(
+    project_id=project.project_id,
+    description="CI/CD token"
+)
+
+# Configure trust policies
+policy = client.add_trust_policy(
+    project_id=project.project_id,
+    github={
+        "repository_owner": "org",
+        "repository": "repo"
+    }
+)
+```
+
+### Build Operations
+
+```python
+# Create and track builds
+build = client.create_build(project_id=PROJECT_ID)
+
+# Share build results
+share_url = client.share_build(build.build_id)
+
+# List project builds
+builds = client.list_builds(project_id=PROJECT_ID)
 ```
 
 ## Features
 
-- Synchronous and asynchronous APIs
-- Project management (CRUD operations)
-- Token management
-- Trust policy configuration
-- BuildKit endpoint creation and management
-- Build sharing and monitoring
-- [Python bindings](https://github.com/fal-ai/depot-client/tree/main/depot_client/api) for [depot's gRPC](https://buf.build/depot/api)
+- Pythonic interface to Depot's API
+- Context manager support for proper resource cleanup
+- Full async/await support using `AsyncClient`
+- Type hints throughout for better IDE integration
+- Automatic handling of BuildKit endpoint lifecycle
+- Comprehensive error handling
 
 ## API Reference
 
-### Project Methods
+### Client Methods
 
-- `list_projects()`: List all available projects
-- `create_project(name, region_id)`: Create a new project
-- `update_project(project_id, name, region_id)`: Update project details
-- `delete_project(project_id)`: Delete a project
-- `reset_project(project_id)`: Reset project state
+#### Project Operations
+- `list_projects() -> List[ProjectInfo]`: List all available projects
+- `create_project(name: str, region_id: str) -> ProjectInfo`: Create a new project
+- `get_project(project_id: str) -> ProjectInfo`: Get project details
+- `delete_project(project_id: str) -> None`: Delete a project
+- `reset_project(project_id: str) -> None`: Reset project state
 
-### Token Methods
+#### Token Management
+- `list_tokens(project_id: str) -> List[TokenInfo]`: List project tokens
+- `create_token(project_id: str, description: str) -> TokenCreationInfo`: Create new token
+- `update_token(token_id: str, description: str) -> None`: Update token description
+- `delete_token(token_id: str) -> None`: Delete token
 
-- `list_tokens(project_id)`: List project tokens
-- `create_token(project_id, description)`: Create new token
-- `update_token(token_id, description)`: Update token
-- `delete_token(token_id)`: Delete token
+#### Trust Policies
+- `list_trust_policies(project_id: str) -> List[TrustPolicy]`: List trust policies
+- `add_trust_policy(project_id: str, github: Optional[dict] = None, circleci: Optional[dict] = None, buildkite: Optional[dict] = None) -> TrustPolicy`: Add trust policy
+- `remove_trust_policy(project_id: str, trust_policy_id: str) -> None`: Remove trust policy
 
-### Trust Policy Methods
+#### Build Operations
+- `create_build(project_id: str) -> Build`: Create new build
+- `finish_build(build_id: str, error: Optional[str] = None) -> None`: Complete build
+- `share_build(build_id: str) -> str`: Share build and get share URL
+- `stop_sharing_build(build_id: str) -> None`: Stop sharing
+- `get_build(build_id: str) -> BuildInfo`: Get build info
+- `list_builds(project_id: str) -> List[BuildInfo]`: List project builds
 
-- `list_trust_policies(project_id)`: List trust policies
-- `add_trust_policy(project_id, ...)`: Add trust policy
-- `remove_trust_policy(project_id, trust_policy_id)`: Remove trust policy
-
-### Build Methods
-
-- `create_build(project_id)`: Create new build
-- `finish_build(build_id, error=None)`: Complete build
-- `share_build(build_id)`: Share build
-- `stop_sharing_build(build_id)`: Stop sharing
-- `get_build(build_id)`: Get build info
-- `list_builds(project_id)`: List project builds
+#### BuildKit Integration
+- `create_endpoint(project_id: str, platform: Optional[str] = None) -> Endpoint`: Create a BuildKit endpoint
 
 ### Environment Variables
 
