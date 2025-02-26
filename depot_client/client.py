@@ -27,7 +27,8 @@ DEPOT_GRPC_HOST = "api.depot.dev"
 DEPOT_GRPC_PORT = 443
 
 REPORT_HEALTH_INTERVAL = 60
-REPORT_HEALTH_THREAD_CANCEL_TIMEOUT = 0.1
+REPORT_HEALTH_SLEEP_INTERVAL = 0.2
+REPORT_HEALTH_CANCEL_TIMEOUT = 1
 
 
 @dataclass
@@ -37,9 +38,12 @@ class Endpoint(EndpointInfo):
     buildkit: BuildKitService
 
     def _report_health(self):
+        last_report = 0.0
         while not self._stop_health.is_set():
-            self.buildkit.report_health(self.build_id, self.platform)
-            time.sleep(REPORT_HEALTH_INTERVAL)
+            if time.time() - last_report > REPORT_HEALTH_INTERVAL:
+                self.buildkit.report_health(self.build_id, self.platform)
+                last_report = time.time()
+            time.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
 
     def __enter__(self):
         self._health_thread = threading.Thread(target=self._report_health, daemon=True)
@@ -49,7 +53,7 @@ class Endpoint(EndpointInfo):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._stop_health.set()
-        self._health_thread.join(timeout=REPORT_HEALTH_THREAD_CANCEL_TIMEOUT)
+        self._health_thread.join(timeout=REPORT_HEALTH_CANCEL_TIMEOUT)
         self.close()
 
     def close(self):
@@ -63,9 +67,13 @@ class AsyncEndpoint(EndpointInfo):
     buildkit: BuildKitService
 
     async def _report_health(self):
+        loop = asyncio.get_running_loop()
+        last_report = 0.0
         while True:
-            await self.buildkit.report_health(self.build_id, self.platform)
-            await asyncio.sleep(REPORT_HEALTH_INTERVAL)
+            if loop.time() - last_report > REPORT_HEALTH_INTERVAL:
+                await self.buildkit.report_health(self.build_id, self.platform)
+                last_report = loop.time()
+            await asyncio.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
 
     async def __aenter__(self):
         self._health_task = asyncio.create_task(self._report_health())
@@ -73,6 +81,12 @@ class AsyncEndpoint(EndpointInfo):
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self._health_task.cancel()
+        try:
+            await asyncio.wait_for(
+                self._health_task, timeout=REPORT_HEALTH_CANCEL_TIMEOUT
+            )
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
         await self.close()
 
     async def close(self):
