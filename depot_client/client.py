@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 import os
 import threading
 import time
@@ -26,9 +28,33 @@ from depot_client.project import (
 DEPOT_GRPC_HOST = "api.depot.dev"
 DEPOT_GRPC_PORT = 443
 
+SERVICE_CONFIG_JSON = json.dumps(
+    {
+        "methodConfig": [
+            {
+                "name": [{}],
+                "retryPolicy": {
+                    "maxAttempts": 5,
+                    "initialBackoff": "0.1s",
+                    "maxBackoff": "5s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": ["UNAVAILABLE"],
+                },
+            }
+        ]
+    }
+)
+
+CHANNEL_OPTIONS = [
+    ("grpc.enable_retries", 1),
+    ("grpc.service_config", SERVICE_CONFIG_JSON),
+]
+
 REPORT_HEALTH_INTERVAL = 60
 REPORT_HEALTH_SLEEP_INTERVAL = 0.2
 REPORT_HEALTH_CANCEL_TIMEOUT = 1
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -64,7 +90,7 @@ class Endpoint(EndpointInfo):
 class AsyncEndpoint(EndpointInfo):
     build_id: str
     platform: str
-    buildkit: BuildKitService
+    buildkit: AsyncBuildKitService
 
     async def _report_health(self):
         loop = asyncio.get_running_loop()
@@ -94,11 +120,22 @@ class AsyncEndpoint(EndpointInfo):
 
 
 class Build:
-    def __init__(self, build_service, build_id: str, build_token: str):
+    def __init__(
+        self,
+        build_service,
+        build_id: str,
+        build_token: str,
+        buildkit_host: str = DEPOT_GRPC_HOST,
+        buildkit_port: int = DEPOT_GRPC_PORT,
+    ):
         self.build_service = build_service
         self.build_id = build_id
         self.build_token = build_token
-        self.buildkit = BuildKitService(build_token)
+        self.buildkit = BuildKitService(
+            buildkit_host,
+            buildkit_port,
+            build_token,
+        )
 
     def close(self):
         self.buildkit.close()
@@ -125,11 +162,22 @@ class Build:
 
 
 class AsyncBuild:
-    def __init__(self, build_service, build_id: str, build_token: str):
+    def __init__(
+        self,
+        build_service,
+        build_id: str,
+        build_token: str,
+        buildkit_host: str = DEPOT_GRPC_HOST,
+        buildkit_port: int = DEPOT_GRPC_PORT,
+    ):
         self.build_service = build_service
         self.build_id = build_id
         self.build_token = build_token
-        self.buildkit = AsyncBuildKitService(build_token)
+        self.buildkit = AsyncBuildKitService(
+            buildkit_host,
+            buildkit_port,
+            build_token,
+        )
 
     async def close(self):
         await self.buildkit.close()
@@ -177,7 +225,13 @@ class Client(BaseClient):
         token: Optional[str] = None,
     ):
         credentials = self._create_channel_credentials(token)
-        self.channel = grpc.secure_channel(f"{host}:{port}", credentials)
+        self.host = host
+        self.port = port
+        self.channel = grpc.secure_channel(
+            f"{host}:{port}",
+            credentials,
+            options=CHANNEL_OPTIONS,
+        )
         self.build = BuildService(self.channel)
         self.core_build = CoreBuildService(self.channel)
         self.project = ProjectService(self.channel)
@@ -308,7 +362,11 @@ class AsyncClient(BaseClient):
         token: Optional[str] = None,
     ):
         credentials = self._create_channel_credentials(token)
-        self.channel = grpc.aio.secure_channel(f"{host}:{port}", credentials)
+        self.channel = grpc.aio.secure_channel(
+            f"{host}:{port}",
+            credentials,
+            options=CHANNEL_OPTIONS,
+        )
         self.build = AsyncBuildService(self.channel)
         self.core_build = AsyncCoreBuildService(self.channel)
         self.project = AsyncProjectService(self.channel)

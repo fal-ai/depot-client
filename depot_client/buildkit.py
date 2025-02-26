@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -10,6 +11,32 @@ from depot_client.api.depot.buildkit.v1.buildkit_pb2 import (
     ReportHealthRequest,
 )
 from depot_client.api.depot.buildkit.v1.buildkit_pb2_grpc import BuildKitServiceStub
+
+BUILDKIT_SERVICE_CONFIG_JSON = json.dumps(
+    {
+        "methodConfig": [
+            {
+                "name": [{}],
+                "retryPolicy": {
+                    "maxAttempts": 5,
+                    "initialBackoff": "0.1s",
+                    "maxBackoff": "5s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": [
+                        "UNAVAILABLE",
+                        # could be a race condition where it doesn't see the build yet
+                        "NOT_FOUND",
+                    ],
+                },
+            }
+        ]
+    }
+)
+
+BUILDKIT_CHANNEL_OPTIONS = [
+    ("grpc.enable_retries", 1),
+    ("grpc.service_config", BUILDKIT_SERVICE_CONFIG_JSON),
+]
 
 DEFAULT_PLATFORM = "amd64"
 
@@ -33,12 +60,16 @@ class EndpointInfo:
 
 
 class BuildKitService:
-    def __init__(self, token: str):
+    def __init__(self, host: str, port: int, token: str):
         creds = grpc.composite_channel_credentials(
             grpc.ssl_channel_credentials(),
             grpc.access_token_call_credentials(token),
         )
-        self.channel = grpc.secure_channel("api.depot.dev:443", creds)
+        self.channel = grpc.secure_channel(
+            f"{host}:{port}",
+            creds,
+            options=BUILDKIT_CHANNEL_OPTIONS,
+        )
         self.stub = BuildKitServiceStub(self.channel)
 
     def close(self):
@@ -84,12 +115,16 @@ class BuildKitService:
 
 
 class AsyncBuildKitService:
-    def __init__(self, token: str):
+    def __init__(self, host: str, port: int, token: str):
         creds = grpc.composite_channel_credentials(
             grpc.ssl_channel_credentials(),
             grpc.access_token_call_credentials(token),
         )
-        self.channel = grpc.aio.secure_channel("api.depot.dev:443", creds)
+        self.channel = grpc.aio.secure_channel(
+            f"{host}:{port}",
+            creds,
+            options=BUILDKIT_CHANNEL_OPTIONS,
+        )
         self.stub = BuildKitServiceStub(self.channel)
 
     async def close(self):
