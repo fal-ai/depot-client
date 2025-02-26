@@ -409,7 +409,7 @@ class AsyncClient(BaseClient):
     async def create_endpoint(
         self, project_id: str, platform: Optional[str] = None
     ) -> AsyncIterator[AsyncEndpoint]:
-        async with self.create_build(project_id) as build:
+        async with await self.create_build(project_id) as build:
             async with await build.get_endpoint(platform=platform) as endpoint:
                 yield endpoint
 
