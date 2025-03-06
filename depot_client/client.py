@@ -50,7 +50,7 @@ CHANNEL_OPTIONS = [
     ("grpc.service_config", SERVICE_CONFIG_JSON),
 ]
 
-REPORT_HEALTH_INTERVAL = 60
+REPORT_HEALTH_INTERVAL = 5
 REPORT_HEALTH_SLEEP_INTERVAL = 0.2
 REPORT_HEALTH_CANCEL_TIMEOUT = 1
 
@@ -58,10 +58,31 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Endpoint(EndpointInfo):
+class Endpoint:
     build_id: str
     platform: str
     buildkit: BuildKitService
+    _info: Optional[EndpointInfo] = None
+
+    @property
+    def endpoint(self) -> str:
+        return self._info.endpoint
+
+    @property
+    def server_name(self) -> str:
+        return self._info.server_name
+
+    @property
+    def cert(self) -> str:
+        return self._info.cert
+
+    @property
+    def key(self) -> str:
+        return self._info.key
+
+    @property
+    def ca_cert(self) -> str:
+        return self._info.ca_cert
 
     def _report_health(self):
         last_report = 0.0
@@ -72,25 +93,49 @@ class Endpoint(EndpointInfo):
             time.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
 
     def __enter__(self):
+        self.buildkit.report_health(self.build_id, self.platform)
         self._health_thread = threading.Thread(target=self._report_health, daemon=True)
         self._stop_health = threading.Event()
         self._health_thread.start()
+        self._info = self.buildkit.get_endpoint(self.build_id, self.platform)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._stop_health.set()
         self._health_thread.join(timeout=REPORT_HEALTH_CANCEL_TIMEOUT)
         self.close()
+        self._info = None
 
     def close(self):
         self.buildkit.release_endpoint(self.build_id, self.platform)
 
 
 @dataclass
-class AsyncEndpoint(EndpointInfo):
+class AsyncEndpoint:
     build_id: str
     platform: str
     buildkit: AsyncBuildKitService
+    _info: Optional[EndpointInfo] = None
+
+    @property
+    def endpoint(self) -> str:
+        return self._info.endpoint
+
+    @property
+    def server_name(self) -> str:
+        return self._info.server_name
+
+    @property
+    def cert(self) -> str:
+        return self._info.cert
+
+    @property
+    def key(self) -> str:
+        return self._info.key
+
+    @property
+    def ca_cert(self) -> str:
+        return self._info.ca_cert
 
     async def _report_health(self):
         loop = asyncio.get_running_loop()
@@ -102,7 +147,9 @@ class AsyncEndpoint(EndpointInfo):
             await asyncio.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
 
     async def __aenter__(self):
+        await self.buildkit.report_health(self.build_id, self.platform)
         self._health_task = asyncio.create_task(self._report_health())
+        self._info = await self.buildkit.get_endpoint(self.build_id, self.platform)
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -114,6 +161,7 @@ class AsyncEndpoint(EndpointInfo):
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
         await self.close()
+        self._info = None
 
     async def close(self):
         await self.buildkit.release_endpoint(self.build_id, self.platform)
@@ -148,13 +196,7 @@ class Build:
         self.close()
 
     def get_endpoint(self, platform: Optional[str] = None) -> Endpoint:
-        endpoint = self.buildkit.get_endpoint(self.build_id, platform=platform)
         return Endpoint(
-            endpoint=endpoint.endpoint,
-            server_name=endpoint.server_name,
-            cert=endpoint.cert,
-            key=endpoint.key,
-            ca_cert=endpoint.ca_cert,
             build_id=self.build_id,
             platform=platform,
             buildkit=self.buildkit,
@@ -190,13 +232,7 @@ class AsyncBuild:
         await self.close()
 
     async def get_endpoint(self, platform: Optional[str] = None) -> AsyncEndpoint:
-        endpoint = await self.buildkit.get_endpoint(self.build_id, platform=platform)
         return AsyncEndpoint(
-            endpoint=endpoint.endpoint,
-            server_name=endpoint.server_name,
-            cert=endpoint.cert,
-            key=endpoint.key,
-            ca_cert=endpoint.ca_cert,
             build_id=self.build_id,
             platform=platform,
             buildkit=self.buildkit,
