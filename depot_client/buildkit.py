@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 import grpc
 
@@ -84,7 +84,6 @@ class BuildKitService:
             if response.HasField("pending"):
                 continue
             elif response.HasField("active"):
-                print(dir(response.active.cert))
                 return EndpointInfo(
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
@@ -95,14 +94,22 @@ class BuildKitService:
             else:
                 raise ValueError("Unknown response type: {response}")
 
-    def report_health(self, build_id: str, platform: Optional[str] = None) -> None:
+    def report_health(
+        self,
+        build_id: str,
+        platform: Optional[str] = None,
+        callback: Optional[Callable[[], bool]] = None,
+    ) -> None:
         request = ReportHealthRequest(
             build_id=build_id,
             platform=Platform.Value(get_platform(platform)),
         )
 
         def request_generator():
-            yield request
+            while True:
+                yield request
+                if callback and not callback():
+                    break
 
         self.stub.ReportHealth(request_generator())
 
@@ -139,7 +146,6 @@ class AsyncBuildKitService:
             if response.HasField("pending"):
                 continue
             elif response.HasField("active"):
-                print(dir(response.active.cert))
                 return EndpointInfo(
                     endpoint=response.active.endpoint,
                     server_name=response.active.server_name,
@@ -151,15 +157,21 @@ class AsyncBuildKitService:
                 raise ValueError("Unknown response type: {response}")
 
     async def report_health(
-        self, build_id: str, platform: Optional[str] = None
+        self,
+        build_id: str,
+        platform: Optional[str] = None,
+        callback: Optional[Callable[[], Awaitable[bool]]] = None,
     ) -> None:
         request = ReportHealthRequest(
             build_id=build_id,
             platform=Platform.Value(get_platform(platform)),
         )
 
-        def request_generator():
-            yield request
+        async def request_generator():
+            while True:
+                yield request
+                if callback and not await callback():
+                    break
 
         await self.stub.ReportHealth(request_generator())
 

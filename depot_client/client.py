@@ -50,8 +50,8 @@ CHANNEL_OPTIONS = [
     ("grpc.service_config", SERVICE_CONFIG_JSON),
 ]
 
-REPORT_HEALTH_INTERVAL = 5
-REPORT_HEALTH_SLEEP_INTERVAL = 0.2
+REPORT_HEALTH_INTERVAL = 30
+REPORT_HEALTH_SLEEP_INTERVAL = 0.1
 REPORT_HEALTH_CANCEL_TIMEOUT = 1
 
 logger = logging.getLogger(__name__)
@@ -84,18 +84,21 @@ class Endpoint:
     def ca_cert(self) -> str:
         return self._info.ca_cert
 
-    def _report_health(self):
-        last_report = 0.0
-        while not self._stop_health.is_set():
-            if time.time() - last_report > REPORT_HEALTH_INTERVAL:
-                self.buildkit.report_health(self.build_id, self.platform)
-                last_report = time.time()
+    def _health_callback(self):
+        start = time.time()
+        while time.time() - start < REPORT_HEALTH_INTERVAL:
+            if self._stop_health.is_set():
+                return False
             time.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
+        return True
 
     def __enter__(self):
-        self.buildkit.report_health(self.build_id, self.platform)
-        self._health_thread = threading.Thread(target=self._report_health, daemon=True)
         self._stop_health = threading.Event()
+        self._health_thread = threading.Thread(
+            target=self.buildkit.report_health,
+            args=(self.build_id, self.platform, self._health_callback),
+            daemon=True,
+        )
         self._health_thread.start()
         self._info = self.buildkit.get_endpoint(self.build_id, self.platform)
         return self
@@ -137,18 +140,12 @@ class AsyncEndpoint:
     def ca_cert(self) -> str:
         return self._info.ca_cert
 
-    async def _report_health(self):
-        loop = asyncio.get_running_loop()
-        last_report = 0.0
-        while True:
-            if loop.time() - last_report > REPORT_HEALTH_INTERVAL:
-                await self.buildkit.report_health(self.build_id, self.platform)
-                last_report = loop.time()
-            await asyncio.sleep(REPORT_HEALTH_SLEEP_INTERVAL)
+    async def _health_callback(self):
+        await asyncio.sleep(REPORT_HEALTH_INTERVAL)
+        return True
 
     async def __aenter__(self):
-        await self.buildkit.report_health(self.build_id, self.platform)
-        self._health_task = asyncio.create_task(self._report_health())
+        self._health_task = asyncio.create_task(self._health_callback())
         self._info = await self.buildkit.get_endpoint(self.build_id, self.platform)
         return self
 
@@ -534,6 +531,7 @@ def _main():
         client.list_builds(project_id)
         with client.create_endpoint(project_id) as endpoint:
             print(repr(endpoint))
+            time.sleep(90)
             assert isinstance(endpoint.cert, str)
             assert isinstance(endpoint.key, str)
             assert isinstance(endpoint.ca_cert, str)
@@ -547,6 +545,7 @@ async def _async_main():
         async with await client.create_build(project_id) as build:
             async with await build.get_endpoint() as endpoint:
                 print(repr(endpoint))
+                await asyncio.sleep(90)
                 assert isinstance(endpoint.cert, str)
                 assert isinstance(endpoint.key, str)
                 assert isinstance(endpoint.ca_cert, str)
